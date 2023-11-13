@@ -26,12 +26,24 @@ fn main() {
             global: true,
             default_color: Color::WHITE,
         })
-        .add_plugins(PlayerPlugin)
+        .add_plugins(NoCameraPlayerPlugin)
         .add_plugins(WorldPlugin)
         .add_systems(Startup,  spawn_light)
         .add_systems(Update, animate_light_direction)
+        .add_systems(Startup, setup)
         .run();
 }
+
+fn setup(mut commands: Commands) {
+    commands.spawn((
+        Camera3dBundle {
+            transform: Transform::from_xyz(0.0, 120.0, 5.5),
+            ..default()
+        },
+        FlyCam
+    ));
+}
+
 
 fn spawn_light(mut commands: Commands) {
     commands.spawn(DirectionalLightBundle {

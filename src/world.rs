@@ -1,12 +1,22 @@
 use bevy::prelude::*;
 use rand::Rng;
 use bevy::render::render_resource::PrimitiveTopology;
+use noise::{NoiseFn, Perlin, Seedable};
 
 use bevy::render::mesh::Indices;
 pub struct WorldPlugin;
 
+// CHUNK
+const CHUNK_WIDTH : i32 = 50;
+const CHUNK_HEIGHT : i32 = 256;
+
+// BLOCK TYPES
 const BLOCK_AIR : i32 = 0;
 const BLOCK_SOLID : i32 = 1;
+
+// TERRAIN
+const GROUND_LEVEL : i32 = 100;
+const AMPLITUDE : i32 = 5;
 
 struct Block {
     id: i32,
@@ -33,8 +43,16 @@ impl Chunk {
         
         let mut blocks = Vec::with_capacity(num_voxels_x as usize);
         let mut block_ids : i32 = 0; 
-        
+
         let mut rng = rand::thread_rng();
+        let random_seed: u32 = rng.gen();
+        let perlin = Perlin::new(random_seed);
+
+        let random_seed2: u32 = rng.gen();
+        let perlin2 = Perlin::new(random_seed2);
+
+        let random_seed3: u32 = rng.gen();
+        let perlin3 = Perlin::new(random_seed3);
 
         for _x in 0..num_voxels_x {
             let mut row = Vec::with_capacity(num_voxels_y as usize);
@@ -43,14 +61,7 @@ impl Chunk {
                 let mut col = Vec::with_capacity(num_voxels_z as usize);
 
                 for _z in 0..num_voxels_z {
-                    
-                    if rng.gen_range(0..=1) == 0 {
-                        col.push(Block::new(block_ids, BLOCK_AIR));
-                    } else {
-                        col.push(Block::new(block_ids, BLOCK_SOLID));
-                    }
-
-                    block_ids += 1;
+                    col.push(Block::new(block_ids, getBlock(_x, _y, _z, perlin, perlin2, perlin3)));
                 }
 
                 row.push(col);
@@ -63,18 +74,29 @@ impl Chunk {
     }
 }
 
-impl Plugin for WorldPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_systems(Startup, spawn_chunk);
+
+fn getBlock(x: i32, y: i32, z: i32, perlin: Perlin, perlin2: Perlin, perlin3: Perlin) -> i32 {
+    let scale : f64 = 0.1;
+    let val : f64 = perlin.get([x as f64 * scale, 0.0, z as f64 * scale]) +
+                    perlin2.get([x as f64 * scale, 0.0, z as f64 * scale]) +
+                    perlin3.get([x as f64 * scale, 0.0, z as f64 * scale]);
+
+    let surfaceY : i32 = (GROUND_LEVEL as f64 + (val * AMPLITUDE as f64)) as i32;
+    
+    if y < surfaceY {
+        return BLOCK_SOLID;
+    } else {
+        return BLOCK_AIR;
     }
 }
+
 
 fn spawn_chunk(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let size: IVec3 = IVec3::new(16, 100, 16);
+    let size: IVec3 = IVec3::new(CHUNK_WIDTH, CHUNK_HEIGHT, CHUNK_WIDTH);
     let chunk = Chunk::new(0, size);
 
     let cube_mesh: Handle<Mesh> = create_cube_mesh(&mut meshes, &chunk);
@@ -257,5 +279,11 @@ fn generate_cube(
         indices.push(base_index as u32 + index);
     }
     
-    
+}
+
+
+impl Plugin for WorldPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(Startup, spawn_chunk);
+    }
 }

@@ -24,7 +24,7 @@ fn spawn_player(
         PbrBundle {
             mesh: meshes.add(Mesh::from(shape::Cube::new(1.0))),
             material: materials.add(Color::BLUE.into()),
-            transform: Transform::from_xyz(0.0, 0.5, 0.0),
+            transform: Transform::from_xyz(0.0, 100.0, 0.0),
             ..default()
         },
         Player,
