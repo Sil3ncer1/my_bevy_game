@@ -121,10 +121,10 @@ fn create_cube_mesh(
     
     let mut vertices: Vec<Vec3> = Vec::new();
     let mut indices: Vec<u32> = Vec::new();
-    let mut vfaces: Vec<u32> = Vec::new();
+    let mut vfaces: Vec<usize> = Vec::new();
     let mut normals: Vec<Vec3> = Vec::new();
 
-    // Check for Neighbouring Voxels, to hide Faces
+    // Check for neighboring voxels, to hide faces
     for (x, row) in chunk.blocks.iter().enumerate() {
         for (y, col) in row.iter().enumerate() {
             for (z, voxel) in col.iter().enumerate() {
@@ -134,46 +134,42 @@ fn create_cube_mesh(
                 if (x + 1 < chunk.blocks.len() && chunk.blocks[x+1][y][z].block_type == BLOCK_AIR) 
                     || x == chunk.blocks.len() - 1 {
 
-                    let elements_to_push: Vec<u32> = vec![0, 1, 2, 2, 3, 0];
-                    vfaces.extend(elements_to_push);
+                    vfaces.push(0);
                 }
                 
                 if (x != 0 && chunk.blocks[x-1][y][z].block_type == BLOCK_AIR) 
                     || x == 0 {
 
-                    let elements_to_push: Vec<u32> = vec![4, 5, 6, 6, 7, 4];
-                    vfaces.extend(elements_to_push);
+                    vfaces.push(1);
                 }
                 
                 // Y Direction
                 if (y + 1 < chunk.blocks[x].len() && chunk.blocks[x][y+1][z].block_type == BLOCK_AIR) 
                     || y == chunk.blocks[x].len() - 1 {
 
-                    let elements_to_push: Vec<u32> = vec![8, 9, 10, 10, 11, 8];
-                    vfaces.extend(elements_to_push);
+                    vfaces.push(2);
                 }
                 
                 if (y != 0 && chunk.blocks[x][y-1][z].block_type == BLOCK_AIR) 
                     || y == 0 {
 
-                    let elements_to_push: Vec<u32> = vec![12, 13, 14, 14, 15, 12];
-                    vfaces.extend(elements_to_push);
+                    vfaces.push(3);
                 }
                 
                 // Z Direction
                 if (z + 1 < chunk.blocks[x][y].len() && chunk.blocks[x][y][z+1].block_type == BLOCK_AIR) 
                     || z == chunk.blocks[x][y].len() - 1 {
 
-                    let elements_to_push: Vec<u32> = vec![16, 17, 18, 18, 19, 16];
-                    vfaces.extend(elements_to_push);
+                    vfaces.push(4);
                 }
 
                 if (z != 0 && chunk.blocks[x][y][z-1].block_type == BLOCK_AIR) 
                     || z == 0 {
-                    let elements_to_push: Vec<u32> = vec![20, 21, 22, 22, 23, 20];
-                    vfaces.extend(elements_to_push);
+                        
+                    vfaces.push(5);
                 }
 
+                // Generate geometry data of 1 voxel which is part of the chunk 
                 generate_cube(&mut vertices, &mut indices, &mut vfaces,&mut normals,x,y,z);
                 vfaces.clear();
                 
@@ -182,7 +178,7 @@ fn create_cube_mesh(
     }
     
 
-    // Generate cube vertices and indices based on voxel data
+    // Generate chunk-mesh with the vertices and indices provided by the voxel data
     meshes.add(Mesh::new(PrimitiveTopology::TriangleList)
         .with_inserted_attribute( Mesh::ATTRIBUTE_POSITION, vertices)
         .with_inserted_attribute( Mesh::ATTRIBUTE_NORMAL, normals)
@@ -190,96 +186,114 @@ fn create_cube_mesh(
     )
 }
 
+// Generate one voxel with visible faces of the chunk-mesh
 fn generate_cube(
     vertices: &mut Vec<Vec3>,
     indices: &mut Vec<u32>,
-    vfaces: &mut Vec<u32>,
+    vfaces: &mut Vec<usize>,
     normals: &mut Vec<Vec3>,
     x: usize,
     y: usize,
     z: usize,
 ) {
-    let positions: [Vec3; 24] = [
+
+    // Array for all possible vertex position of a Voxel
+    let positions: [[Vec3; 4];6]  = 
+    [[
+         // X Direction Position
         Vec3::new(0.5, -0.5, -0.5),
         Vec3::new(0.5, 0.5, -0.5),             
         Vec3::new(0.5, 0.5, 0.5),             
         Vec3::new(0.5, -0.5, 0.5), 
-
+        ],[
         Vec3::new(-0.5, 0.5, 0.5),
         Vec3::new(-0.5, 0.5, -0.5),
         Vec3::new(-0.5, -0.5, -0.5), 
         Vec3::new(-0.5, -0.5, 0.5),
-
+        ],[
+        // Y Direction Position
         Vec3::new(0.5, 0.5, -0.5),
         Vec3::new(-0.5, 0.5, -0.5), 
         Vec3::new(-0.5, 0.5, 0.5),
         Vec3::new(0.5, 0.5, 0.5),
-
+        ],[
         Vec3::new(-0.5, -0.5, -0.5), 
         Vec3::new(0.5, -0.5, -0.5),  
         Vec3::new(0.5, -0.5, 0.5),
         Vec3::new(-0.5, -0.5, 0.5),
-
+        ],[
+        // Z Direction Position
         Vec3::new(-0.5, -0.5, 0.5),
         Vec3::new(0.5, -0.5, 0.5),
         Vec3::new(0.5, 0.5, 0.5),
         Vec3::new(-0.5, 0.5, 0.5), 
-
+        ],[
         Vec3::new(-0.5, 0.5, -0.5),
         Vec3::new(0.5, 0.5, -0.5),
         Vec3::new(0.5, -0.5, -0.5), 
         Vec3::new(-0.5, -0.5, -0.5),
-    ];
+    ]];
 
-    let normal: [Vec3; 24] = [
-        
+    // Array for all possible normal direction of a Voxel 
+    // TODO: Simplify normal data 
+    let normal: [[Vec3; 4];6]  = 
+    [[
+        // X Direction Normals
         Vec3::new( 1.0 , 0.0 , 0.0),
         Vec3::new( 1.0 , 0.0 , 0.0),       
         Vec3::new( 1.0 , 0.0 , 0.0),            
         Vec3::new( 1.0, 0.0 , 0.0 ),
-
+        ],[
         Vec3::new( -1.0 , 0.0 , 0.0),
         Vec3::new( -1.0 , 0.0 , 0.0),       
         Vec3::new( -1.0 , 0.0 , 0.0),            
         Vec3::new( -1.0, 0.0 , 0.0 ),
-	
+        ],[
+        // Y Direction Normals
         Vec3::new( 0.0 , 1.0 , 0.0),
         Vec3::new( 0.0, 1.0 , 0.0),       
         Vec3::new( 0.0, 1.0 , 0.0),            
         Vec3::new( 0.0, 1.0 , 0.0 ),
-
+        ],[
         Vec3::new( 0.0 , -1.0 , 0.0),
         Vec3::new( 0.0 , -1.0  , 0.0),       
         Vec3::new( 0.0 , -1.0  , 0.0),            
         Vec3::new( 0.0, -1.0  , 0.0 ),
-
+        ],[
+        // Z Direction Normals
         Vec3::new( 0.0 , 0.0 , 1.0),
         Vec3::new( 0.0 , 0.0 , 1.0),       
         Vec3::new( 0.0 , 0.0 , 1.0),            
         Vec3::new( 0.0 , 0.0 , 1.0),
-
+        ],[
         Vec3::new( 0.0 , 0.0 , -1.0),
         Vec3::new( 0.0 , 0.0 , -1.0),       
         Vec3::new( 0.0 , 0.0 , -1.0),            
         Vec3::new( 0.0 , 0.0 , -1.0),
-        
-    ];
+    ]];
     
-    for normal in normal.iter() {
-        normals.push(*normal);
+    // For loop for each face to render
+    for i in vfaces {
+
+        // Push all corresponded vertices of the face
+        vertices.extend_from_slice(
+            &mut positions[*i]
+                .iter()
+                .map(|&position| position + Vec3::new(x as f32, y as f32, z as f32))
+                .collect::<Vec<_>>(),
+        );
+
+        // Push all corresponded Normals  of the face
+        normals.extend_from_slice(&normal[*i]);
+
+        // Push all indices of the face
+        let base_index: u32 = vertices.len() as u32;
+        indices.append(&mut vec![base_index + 0 as u32, base_index + 1 as u32, base_index + 2 as u32, base_index + 2 as u32, base_index + 3 as u32, base_index + 0]);
+
+        }
     }
 
-    let base_index = vertices.len();
 
-    for position in positions.iter() {
-        vertices.push(*position + Vec3::new(x as f32, y as f32, z as f32));
-    }
-
-    for &index in vfaces.iter() {
-        indices.push(base_index as u32 + index);
-    }
-    
-}
 
 
 impl Plugin for WorldPlugin {
