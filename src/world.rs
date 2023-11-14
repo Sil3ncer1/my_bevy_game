@@ -140,7 +140,7 @@ fn spawn_chunks(
     });
 
         let cube_mesh: Handle<Mesh> = create_cube_mesh(&mut meshes, &chunk, &mut neighbors_by_direction);
-        let random_hue: f32 = rand::thread_rng().gen_range(0.0..=1.0);
+        let random_hue: f32 = rand::thread_rng().gen_range(0.5..=1.0);
         let material = materials.add(Color::rgb(0.0, 0.0, random_hue).into());
         let cube = PbrBundle {
             mesh: cube_mesh,
@@ -163,6 +163,7 @@ fn create_cube_mesh(
     let mut vertices: Vec<Vec3> = Vec::new();
     let mut indices: Vec<u32> = Vec::new();
     let mut vfaces: Vec<usize> = Vec::new();
+    let mut colors: Vec<Vec4> = Vec::new();
     let mut normals: Vec<Vec3> = Vec::new();
 
     // Check for neighboring voxels, to hide faces
@@ -241,7 +242,7 @@ fn create_cube_mesh(
                 }
 
                 // Generate geometry data of 1 voxel which is part of the chunk 
-                generate_cube(&mut vertices, &mut indices, &mut vfaces,&mut normals,x,y,z);
+                generate_cube(&mut vertices, &mut indices, &mut vfaces,&mut normals,&mut colors,x,y,z);
                 vfaces.clear();
                 
             }      
@@ -253,6 +254,7 @@ fn create_cube_mesh(
     meshes.add(Mesh::new(PrimitiveTopology::TriangleList)
         .with_inserted_attribute( Mesh::ATTRIBUTE_POSITION, vertices)
         .with_inserted_attribute( Mesh::ATTRIBUTE_NORMAL, normals)
+        .with_inserted_attribute( Mesh::ATTRIBUTE_COLOR, colors)
         .with_indices(Some(Indices::U32(indices)))
     )
 }
@@ -263,6 +265,7 @@ fn generate_cube(
     indices: &mut Vec<u32>,
     vfaces: &mut Vec<usize>,
     normals: &mut Vec<Vec3>,
+    colors: &mut Vec<Vec4>,
     x: usize,
     y: usize,
     z: usize,
@@ -342,7 +345,8 @@ fn generate_cube(
         Vec3::new( 0.0 , 0.0 , -1.0),            
         Vec3::new( 0.0 , 0.0 , -1.0),
     ]];
-    
+    let random_hue: f32 = rand::thread_rng().gen_range(0.0..=1.0);
+    let mut colorcube : Vec4 = Vec4::new(0.0,0.0,random_hue,1.0);
     // For loop for each face to render
     for i in vfaces {
 
@@ -360,7 +364,10 @@ fn generate_cube(
         // Push all indices of the face
         let base_index: u32 = vertices.len() as u32;
         indices.append(&mut vec![base_index + 0 as u32, base_index + 1 as u32, base_index + 2 as u32, base_index + 2 as u32, base_index + 3 as u32, base_index + 0]);
-
+        colors.push(colorcube);
+        colors.push(colorcube);
+        colors.push(colorcube);
+        colors.push(colorcube);
         }
     }
 
