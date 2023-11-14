@@ -23,7 +23,7 @@ fn main() {
         ))
         .add_plugins(WireframePlugin)
         .insert_resource(WireframeConfig {
-            global: true,
+            global: false,
             default_color: Color::WHITE,
         })
         .add_plugins(NoCameraPlayerPlugin)
@@ -37,7 +37,7 @@ fn main() {
 fn setup(mut commands: Commands) {
     commands.spawn((
         Camera3dBundle {
-            transform: Transform::from_xyz(0.0, 120.0, 5.5),
+            transform: Transform::from_xyz(5.0, 120.0, 5.5),
             ..default()
         },
         FlyCam

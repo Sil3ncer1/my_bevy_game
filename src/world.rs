@@ -1,7 +1,10 @@
+use std::slice::Chunks;
+
 use bevy::prelude::*;
 use rand::Rng;
 use bevy::render::render_resource::PrimitiveTopology;
 use libnoise::prelude::*;
+use bevy::utils::HashMap;
 
 
 
@@ -52,7 +55,7 @@ impl Chunk {
         let mut block_ids : i32 = 0; 
 
 
-        let mut noise: Simplex<2> = Source::simplex(2);
+        let mut noise: Simplex<2> = Source::simplex(4);
 
         for _x in 0..num_voxels_x {
             let mut row: Vec<Vec<Block>> = Vec::with_capacity(num_voxels_y as usize);
@@ -103,47 +106,49 @@ fn spawn_chunks(
     for x in 0..RENDER_DISTANCE {
         for z in 0..RENDER_DISTANCE {
             let position = IVec2::new(x as i32 * CHUNK_WIDTH, z as i32 * CHUNK_WIDTH);
-
             let size: IVec3 = IVec3::new(CHUNK_WIDTH, CHUNK_HEIGHT, CHUNK_WIDTH);
             let chunk = Chunk::new(chunk_ids, size, position);
-            
             chunk_ids += 1;
-
-            let cube_mesh: Handle<Mesh> = create_cube_mesh(&mut meshes, &chunk);
-            let material = materials.add(Color::BLUE.into());
-            
-        
-            let cube = PbrBundle {
-                mesh: cube_mesh,
-                material: material.clone(),
-                transform: Transform::from_xyz(position.x as f32 , 0 as f32, position.y as f32),
-                ..default()
-            };
             
             chunks.push(chunk);
-
-            commands.spawn(cube);
         }
     }
 
+    for chunk in &chunks{
+        // Find neighboring chunks via position (distance from each other) and put it into a HashMap
+        let mut neighbors_by_direction: HashMap<&'static str, &Chunk> = HashMap::new();
 
-    // Check neighboring chunks to hide unnecessary faces
+        chunks.iter().for_each(|other_chunk| {
+        let distance_x = chunk.position.x - other_chunk.position.x;
+        let distance_y = chunk.position.y - other_chunk.position.y;
+        
+        if !(distance_x == 0 && distance_y == 0) {
 
-    for chunk in chunks.iter() {
-        for (x, row) in chunk.blocks.iter().enumerate() {
-            for (y, col) in row.iter().enumerate() {
-                for (z, voxel) in col.iter().enumerate() {
-                    if voxel.block_type == BLOCK_AIR { continue; }
-                    
-                    // Only look at voxels on the border of a chunk
-                    if (x != 0 && x != chunk.blocks.len() - 1) { continue; }
-                    if (z != 0 && z !=chunk.blocks[x][y].len() - 1) { continue; }
-                    
-                    // TODO: REMOVE FACES
-
-                }
+            if distance_x == CHUNK_WIDTH && distance_y == 0 {
+                neighbors_by_direction.entry("left").or_insert(other_chunk);
+            } else 
+            if distance_x == 0 && distance_y == CHUNK_WIDTH {
+                neighbors_by_direction.entry("top").or_insert(other_chunk);
+            }else 
+            if distance_x == -1*CHUNK_WIDTH && distance_y == 0 {
+                neighbors_by_direction.entry("right").or_insert(other_chunk);
+            }else 
+            if distance_x == 0 && distance_y <= -1*CHUNK_WIDTH {
+                neighbors_by_direction.entry("down").or_insert(other_chunk);
             }
         }
+    });
+
+        let cube_mesh: Handle<Mesh> = create_cube_mesh(&mut meshes, &chunk, &mut neighbors_by_direction);
+        let random_hue: f32 = rand::thread_rng().gen_range(0.0..=1.0);
+        let material = materials.add(Color::rgb(0.0, 0.0, random_hue).into());
+        let cube = PbrBundle {
+            mesh: cube_mesh,
+            material: material.clone(),
+            transform: Transform::from_xyz(chunk.position.x as f32 , 0 as f32, chunk.position.y as f32),
+            ..default()
+        };
+        commands.spawn(cube);
     }
 
 }
@@ -152,6 +157,7 @@ fn spawn_chunks(
 fn create_cube_mesh(
     meshes: &mut ResMut<Assets<Mesh>>,
     chunk: &Chunk,
+    neighbors_by_direction: &mut HashMap<&'static str, &Chunk>,
 ) -> Handle<Mesh> {
     
     let mut vertices: Vec<Vec3> = Vec::new();
@@ -165,43 +171,73 @@ fn create_cube_mesh(
             for (z, voxel) in col.iter().enumerate() {
                 if voxel.block_type == BLOCK_AIR { continue; }
 
-                // X Direction
-                if (x + 1 < chunk.blocks.len() && chunk.blocks[x+1][y][z].block_type == BLOCK_AIR) 
-                    || x == chunk.blocks.len() - 1 {
+                // X Direction------------------------------
+                if (x + 1 < CHUNK_WIDTH as usize && chunk.blocks[x+1][y][z].block_type == BLOCK_AIR){
 
                     vfaces.push(0);
                 }
-                
-                if (x != 0 && chunk.blocks[x-1][y][z].block_type == BLOCK_AIR) 
-                    || x == 0 {
+                // X Direction right chunk neighbor if necessary
+                else if x + 1 ==  CHUNK_WIDTH as usize && neighbors_by_direction.contains_key("right") {
+
+                    if neighbors_by_direction.get("right").unwrap().blocks[0][y][z].block_type == BLOCK_AIR{
+
+                        vfaces.push(0);
+                    }
+                }
+
+                // -X Direction------------------------------
+                if x != 0 && chunk.blocks[x-1][y][z].block_type == BLOCK_AIR{
 
                     vfaces.push(1);
                 }
+                // X Direction left chunk neighbor if necessary
+                else if x == 0 && neighbors_by_direction.contains_key("left") {
+
+                    if neighbors_by_direction.get("left").unwrap().blocks[CHUNK_WIDTH as usize-1][y][z].block_type == BLOCK_AIR{
+
+                        vfaces.push(1);
+                    }
+                }
                 
-                // Y Direction
-                if (y + 1 < chunk.blocks[x].len() && chunk.blocks[x][y+1][z].block_type == BLOCK_AIR) 
-                    || y == chunk.blocks[x].len() - 1 {
+                // Y Direction ------------------------------
+                // (not necessary to check for neighbor because no chunk is on top of each other)
+                if (y + 1 < CHUNK_HEIGHT as usize && chunk.blocks[x][y+1][z].block_type == BLOCK_AIR) 
+                    || y == CHUNK_HEIGHT as usize - 1 {
 
                     vfaces.push(2);
                 }
-                
+                // -Y Direction ------------------------------
                 if (y != 0 && chunk.blocks[x][y-1][z].block_type == BLOCK_AIR) 
                     || y == 0 {
 
                     vfaces.push(3);
                 }
                 
-                // Z Direction
-                if (z + 1 < chunk.blocks[x][y].len() && chunk.blocks[x][y][z+1].block_type == BLOCK_AIR) 
-                    || z == chunk.blocks[x][y].len() - 1 {
+                // Z Direction------------------------------
+                if (z + 1 < CHUNK_WIDTH as usize && chunk.blocks[x][y][z+1].block_type == BLOCK_AIR) {
 
                     vfaces.push(4);
                 }
+                // Z Direction down chunk neighbor if necessary
+                else if z + 1 ==  CHUNK_WIDTH as usize && neighbors_by_direction.contains_key("down") {
 
-                if (z != 0 && chunk.blocks[x][y][z-1].block_type == BLOCK_AIR) 
-                    || z == 0 {
+                    if neighbors_by_direction.get("down").unwrap().blocks[x][y][0].block_type == BLOCK_AIR{
+
+                        vfaces.push(4);
+                    }
+                }
+                // -Z Direction------------------------------
+                if z != 0 && chunk.blocks[x][y][z-1].block_type == BLOCK_AIR {
                         
                     vfaces.push(5);
+                }
+                // Z Direction top chunk neighbor if necessary
+                else if z == 0 && neighbors_by_direction.contains_key("top") {
+
+                    if neighbors_by_direction.get("top").unwrap().blocks[x][y][CHUNK_WIDTH as usize-1].block_type == BLOCK_AIR{
+
+                        vfaces.push(5);
+                    }
                 }
 
                 // Generate geometry data of 1 voxel which is part of the chunk 
