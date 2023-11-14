@@ -1,14 +1,16 @@
 use bevy::prelude::*;
 use rand::Rng;
 use bevy::render::render_resource::PrimitiveTopology;
-use noise::{NoiseFn, Perlin, Seedable};
+use libnoise::prelude::*;
+
+
 
 use bevy::render::mesh::Indices;
 pub struct WorldPlugin;
 
 // CHUNK
 const CHUNK_WIDTH : i32 = 50;
-const CHUNK_HEIGHT : i32 = 256;
+const CHUNK_HEIGHT : i32 = 100;
 
 // BLOCK TYPES
 const BLOCK_AIR : i32 = 0;
@@ -16,7 +18,10 @@ const BLOCK_SOLID : i32 = 1;
 
 // TERRAIN
 const GROUND_LEVEL : i32 = 100;
-const AMPLITUDE : i32 = 5;
+const AMPLITUDE : i32 = 20;
+const SCALE : f64 = 0.02;
+const RENDER_DISTANCE : i32 = 5;
+
 
 struct Block {
     id: i32,
@@ -33,35 +38,29 @@ struct Chunk {
     id: i32,
     size: IVec3,
     blocks: Vec<Vec<Vec<Block>>>,
+    position: IVec2,
 }
 
 impl Chunk {
-    pub fn new(id: i32, size: IVec3) -> Self {
-        let num_voxels_x = size.x;
-        let num_voxels_y = size.y;
-        let num_voxels_z = size.z;
+    pub fn new(id: i32, size: IVec3, position: IVec2) -> Self {
+        let num_voxels_x: i32 = size.x;
+        let num_voxels_y: i32 = size.y;
+        let num_voxels_z: i32 = size.z;
         
-        let mut blocks = Vec::with_capacity(num_voxels_x as usize);
+        let mut blocks: Vec<Vec<Vec<Block>>> = Vec::with_capacity(num_voxels_x as usize);
         let mut block_ids : i32 = 0; 
 
-        let mut rng = rand::thread_rng();
-        let random_seed: u32 = rng.gen();
-        let perlin = Perlin::new(random_seed);
+        let mut noise: Simplex<2> = Source::simplex(2);
 
-        let random_seed2: u32 = rng.gen();
-        let perlin2 = Perlin::new(random_seed2);
-
-        let random_seed3: u32 = rng.gen();
-        let perlin3 = Perlin::new(random_seed3);
 
         for _x in 0..num_voxels_x {
-            let mut row = Vec::with_capacity(num_voxels_y as usize);
+            let mut row: Vec<Vec<Block>> = Vec::with_capacity(num_voxels_y as usize);
             
             for _y in 0..num_voxels_y {
-                let mut col = Vec::with_capacity(num_voxels_z as usize);
+                let mut col: Vec<Block> = Vec::with_capacity(num_voxels_z as usize);
 
                 for _z in 0..num_voxels_z {
-                    col.push(Block::new(block_ids, getBlock(_x, _y, _z, perlin, perlin2, perlin3)));
+                    col.push(Block::new(block_ids, getBlock(_x + position.x, _y, _z + position.y, &mut noise)));
                 }
 
                 row.push(col);
@@ -70,16 +69,13 @@ impl Chunk {
             blocks.push(row);
         }
 
-        Self { id, size, blocks }
+        Self { id, size, blocks, position }
     }
 }
 
 
-fn getBlock(x: i32, y: i32, z: i32, perlin: Perlin, perlin2: Perlin, perlin3: Perlin) -> i32 {
-    let scale : f64 = 0.1;
-    let val : f64 = perlin.get([x as f64 * scale, 0.0, z as f64 * scale]) +
-                    perlin2.get([x as f64 * scale, 0.0, z as f64 * scale]) +
-                    perlin3.get([x as f64 * scale, 0.0, z as f64 * scale]);
+fn getBlock(x: i32, y: i32, z: i32, noise: &mut Simplex<2>) -> i32 {
+    let val : f64 = noise.sample([x as f64 * SCALE, z as f64 * SCALE]);
 
     let surfaceY : i32 = (GROUND_LEVEL as f64 + (val * AMPLITUDE as f64)) as i32;
     
@@ -91,26 +87,33 @@ fn getBlock(x: i32, y: i32, z: i32, perlin: Perlin, perlin2: Perlin, perlin3: Pe
 }
 
 
-fn spawn_chunk(
+
+fn spawn_chunks(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let size: IVec3 = IVec3::new(CHUNK_WIDTH, CHUNK_HEIGHT, CHUNK_WIDTH);
-    let chunk = Chunk::new(0, size);
+    for x in 0..RENDER_DISTANCE {
+        for z in 0..RENDER_DISTANCE {
+            let position = IVec2::new(x as i32 * CHUNK_WIDTH, z as i32 * CHUNK_WIDTH);
 
-    let cube_mesh: Handle<Mesh> = create_cube_mesh(&mut meshes, &chunk);
-    let material = materials.add(Color::BLUE.into());
-
-
-    let cube = PbrBundle {
-        mesh: cube_mesh,
-        material: material.clone(),
-        transform: Transform::from_xyz(0 as f32 ,0 as f32,0 as f32),
-        ..default()
-    };
-
-    commands.spawn(cube);
+            let size: IVec3 = IVec3::new(CHUNK_WIDTH, CHUNK_HEIGHT, CHUNK_WIDTH);
+            let chunk = Chunk::new(0, size, position);
+            
+            let cube_mesh: Handle<Mesh> = create_cube_mesh(&mut meshes, &chunk);
+            let material = materials.add(Color::BLUE.into());
+            
+        
+            let cube = PbrBundle {
+                mesh: cube_mesh,
+                material: material.clone(),
+                transform: Transform::from_xyz(position.x as f32 , 0 as f32, position.y as f32),
+                ..default()
+            };
+        
+            commands.spawn(cube);
+        }
+    }
 }
 
 
@@ -298,6 +301,6 @@ fn generate_cube(
 
 impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, spawn_chunk);
+        app.add_systems(Startup, spawn_chunks);
     }
 }
