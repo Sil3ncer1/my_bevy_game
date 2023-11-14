@@ -8,15 +8,16 @@ use libnoise::prelude::*;
 use bevy::render::mesh::Indices;
 pub struct WorldPlugin;
 
-// CHUNK
-const CHUNK_WIDTH : i32 = 50;
-const CHUNK_HEIGHT : i32 = 100;
 
 // BLOCK TYPES
 const BLOCK_AIR : i32 = 0;
 const BLOCK_SOLID : i32 = 1;
 
-// TERRAIN
+// CHUNK VARIABLES
+const CHUNK_WIDTH : i32 = 50;
+const CHUNK_HEIGHT : i32 = 100;
+
+// TERRAIN VARIABLES
 const GROUND_LEVEL : i32 = 100;
 const AMPLITUDE : i32 = 20;
 const SCALE : f64 = 0.02;
@@ -46,12 +47,12 @@ impl Chunk {
         let num_voxels_x: i32 = size.x;
         let num_voxels_y: i32 = size.y;
         let num_voxels_z: i32 = size.z;
-        
+
         let mut blocks: Vec<Vec<Vec<Block>>> = Vec::with_capacity(num_voxels_x as usize);
         let mut block_ids : i32 = 0; 
 
-        let mut noise: Simplex<2> = Source::simplex(2);
 
+        let mut noise: Simplex<2> = Source::simplex(2);
 
         for _x in 0..num_voxels_x {
             let mut row: Vec<Vec<Block>> = Vec::with_capacity(num_voxels_y as usize);
@@ -60,7 +61,7 @@ impl Chunk {
                 let mut col: Vec<Block> = Vec::with_capacity(num_voxels_z as usize);
 
                 for _z in 0..num_voxels_z {
-                    col.push(Block::new(block_ids, getBlock(_x + position.x, _y, _z + position.y, &mut noise)));
+                    col.push(Block::new(block_ids, get_block(_x + position.x, _y, _z + position.y, &mut noise)));
                 }
 
                 row.push(col);
@@ -73,13 +74,13 @@ impl Chunk {
     }
 }
 
-
-fn getBlock(x: i32, y: i32, z: i32, noise: &mut Simplex<2>) -> i32 {
+// Get the value of the given 2D noise at x, z and choose the corresponding block type
+fn get_block(x: i32, y: i32, z: i32, noise: &mut Simplex<2>) -> i32 {
     let val : f64 = noise.sample([x as f64 * SCALE, z as f64 * SCALE]);
 
-    let surfaceY : i32 = (GROUND_LEVEL as f64 + (val * AMPLITUDE as f64)) as i32;
+    let surface_y : i32 = (GROUND_LEVEL as f64 + (val * AMPLITUDE as f64)) as i32;
     
-    if y < surfaceY {
+    if y < surface_y {
         return BLOCK_SOLID;
     } else {
         return BLOCK_AIR;
@@ -87,19 +88,27 @@ fn getBlock(x: i32, y: i32, z: i32, noise: &mut Simplex<2>) -> i32 {
 }
 
 
-
+// Generate all chunks in render distance
+// A chunk combines multiple voxels and turns them into one mesh
 fn spawn_chunks(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
+    let mut chunks: Vec<Chunk> = Vec::new();
+
+    let mut chunk_ids : i32 = 0;
+
+
     for x in 0..RENDER_DISTANCE {
         for z in 0..RENDER_DISTANCE {
             let position = IVec2::new(x as i32 * CHUNK_WIDTH, z as i32 * CHUNK_WIDTH);
 
             let size: IVec3 = IVec3::new(CHUNK_WIDTH, CHUNK_HEIGHT, CHUNK_WIDTH);
-            let chunk = Chunk::new(0, size, position);
+            let chunk = Chunk::new(chunk_ids, size, position);
             
+            chunk_ids += 1;
+
             let cube_mesh: Handle<Mesh> = create_cube_mesh(&mut meshes, &chunk);
             let material = materials.add(Color::BLUE.into());
             
@@ -110,10 +119,33 @@ fn spawn_chunks(
                 transform: Transform::from_xyz(position.x as f32 , 0 as f32, position.y as f32),
                 ..default()
             };
-        
+            
+            chunks.push(chunk);
+
             commands.spawn(cube);
         }
     }
+
+
+    // Check neighboring chunks to hide unnecessary faces
+
+    for chunk in chunks.iter() {
+        for (x, row) in chunk.blocks.iter().enumerate() {
+            for (y, col) in row.iter().enumerate() {
+                for (z, voxel) in col.iter().enumerate() {
+                    if voxel.block_type == BLOCK_AIR { continue; }
+                    
+                    // Only look at voxels on the border of a chunk
+                    if (x != 0 && x != chunk.blocks.len() - 1) { continue; }
+                    if (z != 0 && z !=chunk.blocks[x][y].len() - 1) { continue; }
+                    
+                    // TODO: REMOVE FACES
+
+                }
+            }
+        }
+    }
+
 }
 
 
