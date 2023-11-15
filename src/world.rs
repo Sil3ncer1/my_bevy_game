@@ -4,7 +4,7 @@ use bevy::prelude::*;
 use bevy::ui::debug;
 use rand::Rng;
 use bevy::render::render_resource::PrimitiveTopology;
-use libnoise::prelude::*;
+use noise::{NoiseFn, Perlin};
 use bevy::utils::HashMap;
 
 
@@ -22,10 +22,11 @@ const CHUNK_WIDTH : i32 = 24;
 const CHUNK_HEIGHT : i32 = 256;
 
 // TERRAIN VARIABLES
+const OCTAVES : usize = 4;
 const GROUND_LEVEL : i32 = 100;
 const AMPLITUDE : i32 = 10;
-const SCALE : f64 = 0.02;
-const RENDER_DISTANCE : i32 = 5;
+const SCALE : f64 = 0.05;
+const RENDER_DISTANCE : i32 = 12;
 
 
 struct Block {
@@ -52,14 +53,20 @@ impl Chunk {
 
         let mut block_ids : i32 = 0; 
     
-        let mut noise: Simplex<2> = Source::simplex(2);
+
+        let mut noises: Vec<Perlin> = Vec::with_capacity(OCTAVES);
+
+        for i in 0..OCTAVES {
+            let perlin = Perlin::new(i as u32);
+            noises.push(perlin);
+        }
 
         for i in 0..num_voxels {
             let x: i32 = i % CHUNK_WIDTH;
             let z: i32 = (i % (CHUNK_WIDTH * CHUNK_WIDTH)) / CHUNK_WIDTH;
             let y: i32 = i / (CHUNK_WIDTH * CHUNK_WIDTH);
         
-            blocks.push(Block::new(block_ids, get_block(x + position.x, y, z + position.y, &mut noise)));
+            blocks.push(Block::new(block_ids, get_block(x + position.x, y, z + position.y, &mut noises)));
             block_ids += 1;
         }
 
@@ -68,10 +75,14 @@ impl Chunk {
 }
 
 // Get the value of the given 2D noise at x, z and choose the corresponding block type
-fn get_block(x: i32, y: i32, z: i32, noise: &mut Simplex<2>) -> i32 {
-    let val : f64 = noise.sample([x as f64 * SCALE, z as f64 * SCALE]);
+fn get_block(x: i32, y: i32, z: i32, noises: &mut Vec<Perlin>) -> i32 {
+    let mut value : f64 = 0.0;
 
-    let surface_y : i32 = (GROUND_LEVEL as f64 + (val * AMPLITUDE as f64)) as i32;
+    for noise in noises {
+        value += noise.get([x as f64 * SCALE, z as f64 * SCALE]);
+    }
+
+    let surface_y : i32 = (GROUND_LEVEL as f64 + (value * AMPLITUDE as f64)) as i32;
     
     if y < surface_y {
         return BLOCK_SOLID;

@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 bevy = { version = "0.12.0", features = ["dynamic_linking"] }
 bevy_flycam = "*"
-libnoise = "1.0.0"
+noise = "0.8.2"
 rand = "0.8"
 # Enable a small amount of optimization in debug mode
 [profile.dev]
