@@ -6,7 +6,7 @@ use rand::Rng;
 use bevy::render::render_resource::PrimitiveTopology;
 use noise::{NoiseFn, Perlin};
 use bevy::utils::HashMap;
-
+use std::cmp::Ordering;
 
 
 use bevy::render::mesh::Indices;
@@ -18,15 +18,15 @@ const BLOCK_AIR : i32 = 0;
 const BLOCK_SOLID : i32 = 1;
 
 // CHUNK VARIABLES
-const CHUNK_WIDTH : i32 = 24;
+const CHUNK_WIDTH : i32 = 32;
 const CHUNK_HEIGHT : i32 = 256;
 
 // TERRAIN VARIABLES
 const OCTAVES : usize = 4;
 const GROUND_LEVEL : i32 = 100;
-const AMPLITUDE : i32 = 10;
+const AMPLITUDE : i32 = 3;
 const SCALE : f64 = 0.05;
-const RENDER_DISTANCE : i32 = 12;
+const RENDER_DISTANCE : i32 = 20;
 
 
 struct Block {
@@ -170,7 +170,7 @@ fn create_cube_mesh(
     let num_voxels: i32 = CHUNK_WIDTH * CHUNK_WIDTH * CHUNK_HEIGHT;
     let num_voxel_per_row : i32 = CHUNK_WIDTH * CHUNK_WIDTH;
 
-
+    
     // Check for neighboring voxels, to hide faces
     for i in 0..num_voxels {
         let x: i32 = i % CHUNK_WIDTH;
@@ -257,18 +257,118 @@ fn create_cube_mesh(
 
 
         // Generate geometry data of 1 voxel which is part of the chunk 
-        generate_cube(&mut vertices, &mut indices, &mut vfaces, &mut normals, &mut colors, 
+        generate_cube(&mut vertices, &mut vfaces, &mut normals, 
             x as usize, y as usize, z as usize);
 
         vfaces.clear();
     }
+
+    // Optimized mesh algorithm -----------------
+
+    // Sort normals and vertices by normals so you can iterate through each face direction group (first all up faces --> down faces... )
+    let mut combined: Vec<(&Vec3, &Vec3)> = normals.iter().zip(vertices.iter()).collect();
+    combined.sort_by(|a, b| partial_cmp(a.0,b.0).unwrap());
+
+    let mut sorted_normals: Vec<Vec3> = Vec::new();
+    let mut sorted_vertices: Vec<Vec3> = Vec::new();
+
+    for (normal, vertex) in combined {
+        sorted_normals.push(normal.clone());
+        sorted_vertices.push(vertex.clone());
+    }
+
+    // Go through all sorted vertices and normals and check which faces are neighbors and can be merged
+    //
+    // Can be merged:
+    //
+    //   1     4==5      7
+    //   +-------+-------+
+    //   |       |       |
+    //   |       |       |
+    //   |       |       |
+    //   +-------+-------+ 
+    //   2     3==6      8
+    //
+    // Cant be merged:
+    //
+    //   1     4==5      7
+    //   +-------+-------+
+    //   |       |       |
+    //   |       |       |
+    //   |       |       |
+    //   +-------+       | 
+    //   2      4|       |   
+    //           |       |
+    //           |       |
+    //           +-------+ 
+    //   4!=5    5       8
+
     
+    let mut i = 0;
+    let mut back = 0;
+    let max = sorted_vertices.len();
+
+    while  i < max{
+        if  (i-back) % 4 == 0 && i-back+5<sorted_vertices.len() && sorted_vertices[i-back] == sorted_vertices[i+5-back] {
+            sorted_vertices.remove(i-back);
+            sorted_vertices.remove(i+2-back);
+            sorted_vertices.remove(i+3-back);
+            sorted_vertices.remove(i+3-back);
+            sorted_vertices.swap(i-back, i+2-back);
+            sorted_vertices.swap(i+1-back, i+2-back);
+
+            sorted_normals.remove(i-back);
+            sorted_normals.remove(i+2-back);
+            sorted_normals.remove(i+3-back);
+            sorted_normals.remove(i+3-back);
+            sorted_normals.swap(i-back, i+2-back);
+            sorted_normals.swap(i+1-back, i+2-back);
+            if i != 0{
+                back = back +1;
+            }
+        }
+        i += 1;
+    }
+
+    i = 0;
+    back = 0;
+    
+    while  i < max{
+        if  (i-back) % 4 == 0 && i-back+5<sorted_vertices.len()  && sorted_vertices[i-back+2] == sorted_vertices[i-back+5] && sorted_vertices[i-back+3] == sorted_vertices[i-back+4]{
+            sorted_vertices.remove(i+2-back);
+            sorted_vertices.remove(i+2-back);
+            sorted_vertices.remove(i+2-back);
+            sorted_vertices.remove(i+2-back);
+
+            sorted_normals.remove(i+2-back);
+            sorted_normals.remove(i+2-back);
+            sorted_normals.remove(i+2-back);
+            sorted_normals.remove(i+2-back);
+            if i != 0 {
+                back = back + 1;
+            }
+        }
+        i += 1;
+    }
+    
+    // Generate all indices and colors for a face
+
+    for i in 0..sorted_vertices.len()/4{
+        indices.append(&mut vec![i as u32 *4 + 0 as u32, i as u32 *4 + 1 as u32, i as u32 *4 + 2 as u32, i as u32 *4 + 2 as u32, i as u32 *4 + 3 as u32, i as u32 *4 + 0]);
+        let random_hue: f32 = rand::thread_rng().gen_range(0.0..=1.0);
+        let color : Vec4 = Vec4::new(0.0,0.0,random_hue,1.0);
+        colors.push(color);
+        colors.push(color);
+        colors.push(color);
+        colors.push(color);
+    }
+
 
     // Generate chunk-mesh with the vertices and indices provided by the voxel data
     meshes.add(Mesh::new(PrimitiveTopology::TriangleList)
-        .with_inserted_attribute( Mesh::ATTRIBUTE_POSITION, vertices)
-        .with_inserted_attribute( Mesh::ATTRIBUTE_NORMAL, normals)
-        // .with_inserted_attribute( Mesh::ATTRIBUTE_COLOR, colors)
+        .with_inserted_attribute( Mesh::ATTRIBUTE_POSITION, sorted_vertices)
+        .with_inserted_attribute( Mesh::ATTRIBUTE_NORMAL, sorted_normals)
+        .with_inserted_attribute( Mesh::ATTRIBUTE_COLOR, colors)
         .with_indices(Some(Indices::U32(indices)))
     )
 }
@@ -276,10 +376,8 @@ fn create_cube_mesh(
 // Generate one voxel with visible faces of the chunk-mesh
 fn generate_cube(
     vertices: &mut Vec<Vec3>,
-    indices: &mut Vec<u32>,
     vfaces: &mut Vec<usize>,
     normals: &mut Vec<Vec3>,
-    colors: &mut Vec<Vec4>,
     x: usize,
     y: usize,
     z: usize,
@@ -361,13 +459,10 @@ fn generate_cube(
     ]];
 
 
-    let random_hue: f32 = rand::thread_rng().gen_range(0.0..=1.0);
-    let mut colorcube : Vec4 = Vec4::new(0.0,0.0,random_hue,1.0);
+   
 
     // For loop for each face to render
     for i in vfaces {
-        
-        let base_index: u32 = vertices.len() as u32;
 
         // Push all corresponded vertices of the face
         vertices.extend_from_slice(
@@ -380,20 +475,25 @@ fn generate_cube(
         // Push all corresponded Normals  of the face
         normals.extend_from_slice(&normal[*i]);
         
-        // Push all indices of the face
-        indices.append(&mut vec![base_index + 0 as u32, base_index + 1 as u32, base_index + 2 as u32, base_index + 2 as u32, base_index + 3 as u32, base_index + 0]);
-        colors.push(colorcube);
-        colors.push(colorcube);
-        colors.push(colorcube);
-        colors.push(colorcube);
+
         }
     }
 
-
-
+fn partial_cmp(one: &Vec3, other: &Vec3) -> Option<Ordering> {
+        // Compare the x, y, and z components of the vectors.
+        match one.x.partial_cmp(&other.x) {
+            Some(Ordering::Equal) => match one.y.partial_cmp(&other.y) {
+                Some(Ordering::Equal) => one.z.partial_cmp(&other.z),
+                other => other,
+            },
+            other => other,
+        }
+    
+    }   
 
 impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, spawn_chunks);
     }
 }
+
