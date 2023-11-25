@@ -331,7 +331,7 @@ fn create_cube_mesh(
 
             for j in (0..sorted_vertices.len()).step_by(4) {
                 if i != j { // Skip comparing the same subarray
-                    if sorted_vertices.len() > j + 2 && first_number == sorted_vertices[j + 1] && fourth_number == sorted_vertices[j + 2] {
+                    if sorted_vertices.len() > j + 2 && first_number == sorted_vertices[j + 1] && fourth_number == sorted_vertices[j + 2] &&  sorted_normals[j + 2] == sorted_normals[i] && sorted_normals[i+3] == sorted_normals[j + 1] {
                         println!("{} : {}",i/4,j/4); 
                         if(i < j){
                             
