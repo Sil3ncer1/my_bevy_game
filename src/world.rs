@@ -57,7 +57,7 @@ impl Chunk {
         let mut noises: Vec<Perlin> = Vec::with_capacity(OCTAVES);
 
         for i in 0..OCTAVES {
-            let perlin = Perlin::new(i as u32);
+            let perlin = Perlin::new(1 as u32);
             noises.push(perlin);
         }
 
@@ -269,10 +269,7 @@ fn create_cube_mesh(
 
     // Optimized mesh algorithm -----------------
 
-    for i in 0..24*5{
-        vertices.remove(0);
-        normals.remove(0);
-    }
+
     // Sort normals and vertices by normals so you can iterate through each face direction group (first all up faces --> down faces... )
     let mut combined: Vec<(&Vec3, &Vec3)> = normals.iter().zip(vertices.iter()).collect();
     combined.sort_by(|a, b| partial_cmp(a.0,b.0).unwrap());
@@ -312,14 +309,15 @@ fn create_cube_mesh(
     //   4!=5    5       8
 
     
-    for i in 0..vertices.len(){
+    for i in 0..sorted_vertices.len(){
         if i % 4 != 0 {continue;}
-        println!("{} {} {} {} {}",i/4,vertices[i] + Vec3::new(0.5, 0.5, 0.5),vertices[i+1] + Vec3::new(0.5, 0.5, 0.5),vertices[i+2] + Vec3::new(0.5, 0.5, 0.5),vertices[i+3] + Vec3::new(0.5, 0.5, 0.5))
+        println!("{} {} {} {} {}",i/4,sorted_vertices[i] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[i+1] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[i+2] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[i+3] + Vec3::new(0.5, 0.5, 0.5))
     }
 
     let mut i = 0;
     let mut back = 0;
     let max = sorted_vertices.len();
+    
 
     while i < sorted_vertices.len() {
         if i % 4 != 0 {
@@ -334,9 +332,29 @@ fn create_cube_mesh(
                     if sorted_vertices.len() > j + 2 && first_number == sorted_vertices[j + 1] && fourth_number == sorted_vertices[j + 2] &&  sorted_normals[j + 2] == sorted_normals[i] && sorted_normals[i+3] == sorted_normals[j + 1] {
                         println!("{} : {}",i/4,j/4); 
                         if(i < j){
+                            sorted_vertices.remove_multiple(vec![i,i+3,j+1,j+2]);
+                            let copy = sorted_vertices.remove(j-3);
+                            let copy2 = sorted_vertices.remove(j-2);
+                            sorted_vertices.insert(i+1, copy);
+                            sorted_vertices.insert(i+2, copy2);
                             
+                            sorted_normals.remove_multiple(vec![i,i+3,j+1,j+2]);
+                            let copy = sorted_normals.remove(j-3);
+                            let copy2 = sorted_normals.remove(j-2);
+                            sorted_normals.insert(i+1, copy);
+                            sorted_normals.insert(i+2, copy2);
                         }else{
+                            sorted_vertices.remove_multiple(vec![i,i+3,j+1,j+2]);
+                            let copy = sorted_vertices.remove(j);
+                            let copy2 = sorted_vertices.remove(j+1);
+                            sorted_vertices.insert(i+1-4, copy);
+                            sorted_vertices.insert(i+2-4, copy2);
                             
+                            sorted_normals.remove_multiple(vec![i,i+3,j+1,j+2]);
+                            let copy = sorted_normals.remove(j);
+                            let copy2 = sorted_normals.remove(j+1);
+                            sorted_normals.insert(i+1-4, copy);
+                            sorted_normals.insert(i+2-4, copy2);
                         }
 
                     }
@@ -344,7 +362,11 @@ fn create_cube_mesh(
         }
         i = i + 1;
     }
-    
+    i = 0;
+    for i in 0..sorted_vertices.len(){
+        if i % 4 != 0 {continue;}
+        println!("{} {} {} {} {}",i/4,sorted_vertices[i] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[i+1] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[i+2] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[i+3] + Vec3::new(0.5, 0.5, 0.5))
+    }
     // Generate all indices and colors for a face
 
     for i in 0..sorted_vertices.len()/4{
@@ -491,3 +513,69 @@ impl Plugin for WorldPlugin {
     }
 }
 
+pub trait RemoveMultiple<T> {
+    /// Remove multiple indices
+    fn remove_multiple(&mut self, to_remove: Vec<usize>);
+    
+    /// Remove multiple indices with swap_remove, this is faster but reorders elements
+    fn swap_remove_multiple(&mut self, to_remove: Vec<usize>);
+    
+    /// Remove and return multiple indices
+    fn take_multiple(&mut self, to_remove: Vec<usize>) -> Vec<T>;
+        
+    /// Remove and return multiple indices, preserving the order specified in the index list
+    fn take_multiple_in_order(&mut self, to_remove: &[usize]) -> Vec<T>;
+    
+    /// Remove and return multiple indices with swap_remove, this is faster but reorders elements and the results are in reverse order
+    fn swap_take_multiple(&mut self, to_remove: Vec<usize>) -> Vec<T>;
+}
+
+impl<T> RemoveMultiple<T> for Vec<T> {
+    fn remove_multiple(&mut self, mut to_remove: Vec<usize>) {
+        to_remove.sort();
+        to_remove.reverse();
+        for r in to_remove {
+            self.remove(r);
+        }
+    }
+    
+    fn swap_remove_multiple(&mut self, mut to_remove: Vec<usize>) {
+        to_remove.sort();
+        to_remove.reverse();
+        for r in to_remove {
+            self.swap_remove(r);
+        }
+    }
+    
+    fn take_multiple(&mut self, mut to_remove: Vec<usize>) -> Vec<T> {
+        to_remove.sort();
+        to_remove.reverse();
+        let mut collected = vec![];
+        for r in to_remove {
+            collected.push(self.remove(r));
+        }
+        collected.reverse();
+        collected
+    }
+    
+    fn take_multiple_in_order(&mut self, to_remove: &[usize]) -> Vec<T> {
+        let mut to_remove = to_remove.iter().copied().enumerate().collect::<Vec<_>>();
+        to_remove.sort_by_key(|(_, r)| *r);
+        to_remove.reverse();
+        let mut collected : Vec<Option<T>> = std::iter::repeat_with(|| None).take(to_remove.len()).collect();
+        for (i, r) in to_remove {
+            collected[i] = Some(self.remove(r));
+        }
+        collected.into_iter().filter_map(|x| x).collect()
+    }
+    
+    fn swap_take_multiple(&mut self, mut to_remove: Vec<usize>) -> Vec<T> {
+        to_remove.sort();
+        to_remove.reverse();
+        let mut collected = vec![];
+        for r in to_remove {
+            collected.push(self.swap_remove(r));
+        }
+        collected
+    }
+}
