@@ -1,4 +1,4 @@
-use bevy::{prelude::*, DefaultPlugins, pbr::wireframe::{NoWireframe, Wireframe, WireframeColor, WireframeConfig, WireframePlugin},diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},};
+use bevy::{prelude::*, DefaultPlugins, pbr::wireframe::{ WireframeConfig, WireframePlugin},};
 use bevy_flycam::prelude::*;
 use world::WorldPlugin;
 use bevy::window::PresentMode;
@@ -17,10 +17,6 @@ fn main() {
         }),
         ..default()
     }))
-        .add_plugins((
-            FrameTimeDiagnosticsPlugin,
-            LogDiagnosticsPlugin::default(),
-        ))
         .add_plugins(WireframePlugin)
         .insert_resource(WireframeConfig {
             global: true,

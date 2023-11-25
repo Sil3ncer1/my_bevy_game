@@ -1,7 +1,7 @@
-use std::slice::Chunks;
 
-use bevy::prelude::*;
-use bevy::ui::debug;
+
+use bevy::{prelude::*, render::render_resource::VertexAttribute};
+
 use rand::Rng;
 use bevy::render::render_resource::PrimitiveTopology;
 use noise::{NoiseFn, Perlin};
@@ -18,36 +18,36 @@ const BLOCK_AIR : i32 = 0;
 const BLOCK_SOLID : i32 = 1;
 
 // CHUNK VARIABLES
-const CHUNK_WIDTH : i32 = 4;
-const CHUNK_HEIGHT : i32 = 256;
+const CHUNK_WIDTH : i32 = 5;
+const CHUNK_HEIGHT : i32 = 114;
 
 // TERRAIN VARIABLES
 const OCTAVES : usize = 4;
 const GROUND_LEVEL : i32 = 100;
-const AMPLITUDE : i32 = 3;
+const AMPLITUDE : i32 = 0;
 const SCALE : f64 = 0.05;
 const RENDER_DISTANCE : i32 = 1;
 
 
 struct Block {
-    id: i32,
+    _id: i32,
     block_type: i32,
 }
 
 impl Block {
-    pub fn new(id: i32, block_type: i32) -> Self {
-        Block { id, block_type }
+    pub fn new(_id: i32, block_type: i32) -> Self {
+        Block { _id, block_type }
     }
 }
 
 struct Chunk {
-    id: i32,
+    _id: i32,
     blocks: Vec<Block>,
     position: IVec2,
 }
 
 impl Chunk {
-    pub fn new(id: i32, size: IVec3, position: IVec2) -> Self {
+    pub fn new(_id: i32, size: IVec3, position: IVec2) -> Self {
         let num_voxels: i32 = size.x * size.y * size.z;
         let mut blocks: Vec<Block> = Vec::with_capacity(num_voxels as usize);
 
@@ -65,12 +65,16 @@ impl Chunk {
             let x: i32 = i % CHUNK_WIDTH;
             let z: i32 = (i % (CHUNK_WIDTH * CHUNK_WIDTH)) / CHUNK_WIDTH;
             let y: i32 = i / (CHUNK_WIDTH * CHUNK_WIDTH);
-        
-            blocks.push(Block::new(block_ids, get_block(x + position.x, y, z + position.y, &mut noises)));
+            if 1 <= x && x <= 3 && 110 <= y && y <= 112 && 1 <= z && z <= 3{
+                blocks.push(Block::new(block_ids, BLOCK_SOLID));
+            }else{
+                blocks.push(Block::new(block_ids, get_block(x + position.x, y, z + position.y, &mut noises)));
+            }
+
             block_ids += 1;
         }
 
-        Self { id, blocks, position }
+        Self { _id, blocks, position }
     }
 }
 
@@ -265,6 +269,10 @@ fn create_cube_mesh(
 
     // Optimized mesh algorithm -----------------
 
+    for i in 0..24*5{
+        vertices.remove(0);
+        normals.remove(0);
+    }
     // Sort normals and vertices by normals so you can iterate through each face direction group (first all up faces --> down faces... )
     let mut combined: Vec<(&Vec3, &Vec3)> = normals.iter().zip(vertices.iter()).collect();
     combined.sort_by(|a, b| partial_cmp(a.0,b.0).unwrap());
@@ -304,51 +312,37 @@ fn create_cube_mesh(
     //   4!=5    5       8
 
     
+    for i in 0..vertices.len(){
+        if i % 4 != 0 {continue;}
+        println!("{} {} {} {} {}",i/4,vertices[i] + Vec3::new(0.5, 0.5, 0.5),vertices[i+1] + Vec3::new(0.5, 0.5, 0.5),vertices[i+2] + Vec3::new(0.5, 0.5, 0.5),vertices[i+3] + Vec3::new(0.5, 0.5, 0.5))
+    }
+
     let mut i = 0;
     let mut back = 0;
     let max = sorted_vertices.len();
 
-    while  i < max{
-        if  (i-back) % 4 == 0 && i-back+6<sorted_vertices.len() && sorted_vertices[i-back] == sorted_vertices[i+5-back] && sorted_vertices[i-back+3] == sorted_vertices[i-back+6] {
-            sorted_vertices.remove(i-back);
-            sorted_vertices.remove(i+2-back);
-            sorted_vertices.remove(i+3-back);
-            sorted_vertices.remove(i+3-back);
-            sorted_vertices.swap(i-back, i+2-back);
-            sorted_vertices.swap(i+1-back, i+2-back);
-
-            sorted_normals.remove(i-back);
-            sorted_normals.remove(i+2-back);
-            sorted_normals.remove(i+3-back);
-            sorted_normals.remove(i+3-back);
-            sorted_normals.swap(i-back, i+2-back);
-            sorted_normals.swap(i+1-back, i+2-back);
-            if i != 0{
-                back = back +1;
-            }
+    while i < sorted_vertices.len() {
+        if i % 4 != 0 {
+            i = i + 1;
+            continue;
         }
-        i += 1;
-    }
+            let first_number = sorted_vertices[i];
+            let fourth_number = sorted_vertices[i+3];
 
-    i = 0;
-    back = 0;
-    
-    while  i < max{
-        if  (i-back) % 4 == 0 && i-back+5<sorted_vertices.len()  && sorted_vertices[i-back+2] == sorted_vertices[i-back+5] && sorted_vertices[i-back+3] == sorted_vertices[i-back+4]{
-            sorted_vertices.remove(i+2-back);
-            sorted_vertices.remove(i+2-back);
-            sorted_vertices.remove(i+2-back);
-            sorted_vertices.remove(i+2-back);
+            for j in (0..sorted_vertices.len()).step_by(4) {
+                if i != j { // Skip comparing the same subarray
+                    if sorted_vertices.len() > j + 2 && first_number == sorted_vertices[j + 1] && fourth_number == sorted_vertices[j + 2] {
+                        println!("{} : {}",i/4,j/4); 
+                        if(i < j){
+                            
+                        }else{
+                            
+                        }
 
-            sorted_normals.remove(i+2-back);
-            sorted_normals.remove(i+2-back);
-            sorted_normals.remove(i+2-back);
-            sorted_normals.remove(i+2-back);
-            if i != 0 {
-                back = back + 1;
-            }
+                    }
+                }
         }
-        i += 1;
+        i = i + 1;
     }
     
     // Generate all indices and colors for a face
