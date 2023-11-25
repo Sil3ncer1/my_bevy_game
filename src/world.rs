@@ -18,7 +18,7 @@ const BLOCK_AIR : i32 = 0;
 const BLOCK_SOLID : i32 = 1;
 
 // CHUNK VARIABLES
-const CHUNK_WIDTH : i32 = 32;
+const CHUNK_WIDTH : i32 = 4;
 const CHUNK_HEIGHT : i32 = 256;
 
 // TERRAIN VARIABLES
@@ -26,7 +26,7 @@ const OCTAVES : usize = 4;
 const GROUND_LEVEL : i32 = 100;
 const AMPLITUDE : i32 = 3;
 const SCALE : f64 = 0.05;
-const RENDER_DISTANCE : i32 = 20;
+const RENDER_DISTANCE : i32 = 1;
 
 
 struct Block {
@@ -309,7 +309,7 @@ fn create_cube_mesh(
     let max = sorted_vertices.len();
 
     while  i < max{
-        if  (i-back) % 4 == 0 && i-back+5<sorted_vertices.len() && sorted_vertices[i-back] == sorted_vertices[i+5-back] {
+        if  (i-back) % 4 == 0 && i-back+6<sorted_vertices.len() && sorted_vertices[i-back] == sorted_vertices[i+5-back] && sorted_vertices[i-back+3] == sorted_vertices[i-back+6] {
             sorted_vertices.remove(i-back);
             sorted_vertices.remove(i+2-back);
             sorted_vertices.remove(i+3-back);

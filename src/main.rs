@@ -23,7 +23,7 @@ fn main() {
         ))
         .add_plugins(WireframePlugin)
         .insert_resource(WireframeConfig {
-            global: false,
+            global: true,
             default_color: Color::WHITE,
         })
         .add_plugins(NoCameraPlayerPlugin)
