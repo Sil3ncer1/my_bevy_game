@@ -18,7 +18,7 @@ const BLOCK_AIR : i32 = 0;
 const BLOCK_SOLID : i32 = 1;
 
 // CHUNK VARIABLES
-const CHUNK_WIDTH : i32 = 4;
+const CHUNK_WIDTH : i32 = 32;
 const CHUNK_HEIGHT : i32 = 256;
 
 // TERRAIN VARIABLES
@@ -26,7 +26,7 @@ const OCTAVES : usize = 4;
 const GROUND_LEVEL : i32 = 100;
 const AMPLITUDE : i32 = 3;
 const SCALE : f64 = 0.05;
-const RENDER_DISTANCE : i32 = 1;
+const RENDER_DISTANCE : i32 = 20;
 
 
 struct Block {
@@ -303,54 +303,145 @@ fn create_cube_mesh(
     //           +-------+ 
     //   4!=5    5       8
 
-    
-    let mut i = 0;
-    let mut back = 0;
-    let max = sorted_vertices.len();
+    // Do the optimization as long as something gets optimized 
+    // TO-DO: Maybe some limit is better so only max face width / height is X
+    let mut g = 1;
+    while g != 0{
+        g = 0;
+        let mut i = 0;
+        let mut j: usize = 0;
+        // Go through the verticies 
+        while i < sorted_vertices.len() {
 
-    while  i < max{
-        if  (i-back) % 4 == 0 && i-back+6<sorted_vertices.len() && sorted_vertices[i-back] == sorted_vertices[i+5-back] && sorted_vertices[i-back+3] == sorted_vertices[i-back+6] {
-            sorted_vertices.remove(i-back);
-            sorted_vertices.remove(i+2-back);
-            sorted_vertices.remove(i+3-back);
-            sorted_vertices.remove(i+3-back);
-            sorted_vertices.swap(i-back, i+2-back);
-            sorted_vertices.swap(i+1-back, i+2-back);
-
-            sorted_normals.remove(i-back);
-            sorted_normals.remove(i+2-back);
-            sorted_normals.remove(i+3-back);
-            sorted_normals.remove(i+3-back);
-            sorted_normals.swap(i-back, i+2-back);
-            sorted_normals.swap(i+1-back, i+2-back);
-            if i != 0{
-                back = back +1;
+            if i % 4 != 0 {                
+                
+                i = i + 1;
+                continue;
             }
+                let first_number = sorted_vertices[i];
+                let fourth_number = sorted_vertices[i+3];
+            // Find pairs of mergeable faces 
+            while j < sorted_vertices.len() {
+
+                // Only go through the face if it is the "starting" vertex"
+                if j % 4 != 0 {
+
+                    j = j + 1;
+                    continue;
+                }
+                // Skip comparing the same subarray
+                    if i != j { 
+                        
+                        // Check if mergeable
+                        if sorted_vertices.len() > j + 2 && first_number == sorted_vertices[j+1] && fourth_number == sorted_vertices[j+2] &&  sorted_normals[j+2] == sorted_normals[i] && sorted_normals[i+3] == sorted_normals[j+1] {
+                            
+                            if i < j{
+                                // Combine the faces via removing and adding vertices together
+                                sorted_vertices.remove_multiple(vec![i,i+3,j+1,j+2]);
+                                let copy = sorted_vertices.remove(j-2);
+                                let copy2 = sorted_vertices.remove(j-2);
+                                sorted_vertices.insert(i, copy);
+                                sorted_vertices.insert(i+3, copy2);
+
+                                sorted_normals.remove_multiple(vec![i,i+3,j+1,j+2]);
+                                let copy = sorted_normals.remove(j-2);
+                                let copy2 = sorted_normals.remove(j-2);
+                                sorted_normals.insert(i, copy);
+                                sorted_normals.insert(i+3, copy2);
+
+                                // Optimized a mesh g++
+                                g = g + 1;
+                            }else{
+                                sorted_vertices.remove_multiple(vec![i,i+3,j+1,j+2]);
+                                let copy = sorted_vertices.remove(i-2);
+                                let copy2 = sorted_vertices.remove(i-2);
+                                sorted_vertices.insert(j+1, copy);
+                                sorted_vertices.insert(j+2, copy2);
+                                
+                                sorted_normals.remove_multiple(vec![i,i+3,j+1,j+2]);
+                                let copy = sorted_normals.remove(i-2);
+                                let copy2 = sorted_normals.remove(i-2);
+                                sorted_normals.insert(j+1, copy);
+                                sorted_normals.insert(j+2, copy2);
+                                
+                                // Optimized a mesh g++
+                                g = g + 1;
+                            }
+                        }
+                    }
+                // Check next pair 
+                j = j + 1;
+            }
+            j = 0;
+            // Check next face for merge
+            i = i + 1;
         }
-        i += 1;
+    }
+    
+    // Same Code but different rule for neighboring because of different direction
+    let mut g = 1;
+    while g != 0{
+        g = 0;
+        let mut i = 0;
+        let mut j: usize = 0;  
+        while i < sorted_vertices.len() {
+            if i % 4 != 0 {
+                i = i + 1;
+                continue;
+            }
+                let third_number = sorted_vertices[i+2];
+                let fourth_number = sorted_vertices[i+3];
+    
+            while j < sorted_vertices.len() {
+                if j % 4 != 0 {
+                    j = j + 1;
+                    continue;
+                }
+                    if i != j {
+                        
+                        //different vertices checked / removed / added
+                        if sorted_vertices.len() > j + 2 && third_number == sorted_vertices[j+1] && fourth_number == sorted_vertices[j] &&  sorted_normals[j+3] == sorted_normals[i] && sorted_normals[i+2] == sorted_normals[j+1] {
+                            
+                            if i < j{
+
+                                sorted_vertices.remove_multiple(vec![i+2,i+3,j,j+1]);
+                                let copy = sorted_vertices.remove(j+2-4);
+                                let copy2 = sorted_vertices.remove(j+2-4);
+                                sorted_vertices.insert(i+2, copy);
+                                sorted_vertices.insert(i+3, copy2);
+
+                                sorted_normals.remove_multiple(vec![i+2,i+3,j+2,j+3]);
+                                let copy = sorted_normals.remove(j+2-4);
+                                let copy2 = sorted_normals.remove(j+2-4);
+                                sorted_normals.insert(i+2, copy);
+                                sorted_normals.insert(i+3, copy2);
+
+                                g = g + 1;
+                            }else{
+
+                                sorted_vertices.remove_multiple(vec![i+2,i+3,j,j+1]);
+                                let copy = sorted_vertices.remove(i-2);
+                                let copy2 = sorted_vertices.remove(i-2);
+                                sorted_vertices.insert(j, copy);
+                                sorted_vertices.insert(j+1, copy2);
+
+                                sorted_normals.remove_multiple(vec![i+2,i+3,j,j+1]);
+                                let copy = sorted_normals.remove(i-2);
+                                let copy2 = sorted_normals.remove(i-2);
+                                sorted_normals.insert(j, copy);
+                                sorted_normals.insert(j+1, copy2);
+
+                                g = g + 1;
+                            }
+                        }
+                    }
+                j = j + 1;
+            }
+            j = 0;
+            i = i + 1;
+        }
     }
 
-    i = 0;
-    back = 0;
-    
-    while  i < max{
-        if  (i-back) % 4 == 0 && i-back+5<sorted_vertices.len()  && sorted_vertices[i-back+2] == sorted_vertices[i-back+5] && sorted_vertices[i-back+3] == sorted_vertices[i-back+4]{
-            sorted_vertices.remove(i+2-back);
-            sorted_vertices.remove(i+2-back);
-            sorted_vertices.remove(i+2-back);
-            sorted_vertices.remove(i+2-back);
-
-            sorted_normals.remove(i+2-back);
-            sorted_normals.remove(i+2-back);
-            sorted_normals.remove(i+2-back);
-            sorted_normals.remove(i+2-back);
-            if i != 0 {
-                back = back + 1;
-            }
-        }
-        i += 1;
-    }
-    
     // Generate all indices and colors for a face
 
     for i in 0..sorted_vertices.len()/4{
@@ -490,6 +581,73 @@ fn partial_cmp(one: &Vec3, other: &Vec3) -> Option<Ordering> {
         }
     
     }   
+
+pub trait RemoveMultiple<T> {
+        /// Remove multiple indices
+        fn remove_multiple(&mut self, to_remove: Vec<usize>);
+    
+        /// Remove multiple indices with swap_remove, this is faster but reorders elements
+        fn swap_remove_multiple(&mut self, to_remove: Vec<usize>);
+    
+        /// Remove and return multiple indices
+        fn take_multiple(&mut self, to_remove: Vec<usize>) -> Vec<T>;
+    
+        /// Remove and return multiple indices, preserving the order specified in the index list
+        fn take_multiple_in_order(&mut self, to_remove: &[usize]) -> Vec<T>;
+    
+        /// Remove and return multiple indices with swap_remove, this is faster but reorders elements and the results are in reverse order
+        fn swap_take_multiple(&mut self, to_remove: Vec<usize>) -> Vec<T>;
+    }
+    
+impl<T> RemoveMultiple<T> for Vec<T> {
+        fn remove_multiple(&mut self, mut to_remove: Vec<usize>) {
+            to_remove.sort();
+            to_remove.reverse();
+            for r in to_remove {
+                self.remove(r);
+            }
+        }
+    
+        fn swap_remove_multiple(&mut self, mut to_remove: Vec<usize>) {
+            to_remove.sort();
+            to_remove.reverse();
+            for r in to_remove {
+                self.swap_remove(r);
+            }
+        }
+    
+        fn take_multiple(&mut self, mut to_remove: Vec<usize>) -> Vec<T> {
+            to_remove.sort();
+            to_remove.reverse();
+            let mut collected = vec![];
+            for r in to_remove {
+                collected.push(self.remove(r));
+            }
+            collected.reverse();
+            collected
+        }
+    
+        fn take_multiple_in_order(&mut self, to_remove: &[usize]) -> Vec<T> {
+            let mut to_remove = to_remove.iter().copied().enumerate().collect::<Vec<_>>();
+            to_remove.sort_by_key(|(_, r)| *r);
+            to_remove.reverse();
+            let mut collected : Vec<Option<T>> = std::iter::repeat_with(|| None).take(to_remove.len()).collect();
+            for (i, r) in to_remove {
+                collected[i] = Some(self.remove(r));
+            }
+            collected.into_iter().filter_map(|x| x).collect()
+        }
+    
+        fn swap_take_multiple(&mut self, mut to_remove: Vec<usize>) -> Vec<T> {
+            to_remove.sort();
+            to_remove.reverse();
+            let mut collected = vec![];
+            for r in to_remove {
+                collected.push(self.swap_remove(r));
+            }
+            collected
+        }
+}
 
 impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
