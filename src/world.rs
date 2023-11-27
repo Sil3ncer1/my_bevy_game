@@ -18,15 +18,15 @@ const BLOCK_AIR : i32 = 0;
 const BLOCK_SOLID : i32 = 1;
 
 // CHUNK VARIABLES
-const CHUNK_WIDTH : i32 = 5;
+const CHUNK_WIDTH : i32 = 15;
 const CHUNK_HEIGHT : i32 = 114;
 
 // TERRAIN VARIABLES
 const OCTAVES : usize = 4;
 const GROUND_LEVEL : i32 = 100;
-const AMPLITUDE : i32 = 0;
+const AMPLITUDE : i32 = 4;
 const SCALE : f64 = 0.05;
-const RENDER_DISTANCE : i32 = 1;
+const RENDER_DISTANCE : i32 = 20;
 
 
 struct Block {
@@ -269,7 +269,6 @@ fn create_cube_mesh(
 
     // Optimized mesh algorithm -----------------
 
-
     // Sort normals and vertices by normals so you can iterate through each face direction group (first all up faces --> down faces... )
     let mut combined: Vec<(&Vec3, &Vec3)> = normals.iter().zip(vertices.iter()).collect();
     combined.sort_by(|a, b| partial_cmp(a.0,b.0).unwrap());
@@ -309,64 +308,75 @@ fn create_cube_mesh(
     //   4!=5    5       8
 
     
-    for i in 0..sorted_vertices.len(){
-        if i % 4 != 0 {continue;}
-        println!("{} {} {} {} {}",i/4,sorted_vertices[i] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[i+1] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[i+2] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[i+3] + Vec3::new(0.5, 0.5, 0.5))
-    }
 
-    let mut i = 0;
-    let mut back = 0;
-    let max = sorted_vertices.len();
+    // how often it should iterate (probably more efficient to iterate so long as long somethings changes / optimized)
+    for g in 0..5{
+        let mut i = 0;
+        let mut j: usize = 0;  
+        while i < sorted_vertices.len() {
+            if i % 4 != 0 {
+                i = i + 1;
+                continue;
+            }
+                let first_number = sorted_vertices[i];
+                let fourth_number = sorted_vertices[i+3];
+    
+            while j < sorted_vertices.len() {
+                if j % 4 != 0 {
+                    j = j + 1;
+                    continue;
+                }
+                    if i != j { // Skip comparing the same subarray
+                        
+                        if sorted_vertices.len() > j + 2 && first_number == sorted_vertices[j + 1] && fourth_number == sorted_vertices[j + 2] &&  sorted_normals[j + 2] == sorted_normals[i] && sorted_normals[i+3] == sorted_normals[j + 1] {
+                            //println!("---{}: {} {} {} {}",i/4,sorted_vertices[i] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[i+1] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[i+2] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[i+3] + Vec3::new(0.5, 0.5, 0.5));
+                            //println!("---{}: {} {} {} {}",j/4,sorted_vertices[j] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[j+1] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[j+2] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[j+3] + Vec3::new(0.5, 0.5, 0.5));
+                            if i < j{
+                                sorted_vertices.remove_multiple(vec![i,i+3,j+1,j+2]);
+                                let copy = sorted_vertices.remove(j-2);
+                                let copy2 = sorted_vertices.remove(j-2);
+                                sorted_vertices.insert(i, copy);
+                                sorted_vertices.insert(i+3, copy2);
+
+                                sorted_normals.remove_multiple(vec![i,i+3,j+1,j+2]);
+                                let copy = sorted_normals.remove(j-2);
+                                let copy2 = sorted_normals.remove(j-2);
+                                sorted_normals.insert(i, copy);
+                                sorted_normals.insert(i+3, copy2);
+                                //println!("---{}: {} {} {} {}",i/4,sorted_vertices[i] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[i+1] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[i+2] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[i+3] + Vec3::new(0.5, 0.5, 0.5));
+
+                            }else{
+                                sorted_vertices.remove_multiple(vec![i,i+3,j+1,j+2]);
+                                let copy = sorted_vertices.remove(i-2);
+                                let copy2 = sorted_vertices.remove(i-2);
+                                sorted_vertices.insert(j+1, copy);
+                                sorted_vertices.insert(j+2, copy2);
+                                
+                                sorted_normals.remove_multiple(vec![i,i+3,j+1,j+2]);
+                                let copy = sorted_normals.remove(i-2);
+                                let copy2 = sorted_normals.remove(i-2);
+                                sorted_normals.insert(j+1, copy);
+                                sorted_normals.insert(j+2, copy2);
+                            //println!("---{}: {} {} {} {}",j/4,sorted_vertices[j] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[j+1] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[j+2] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[j+3] + Vec3::new(0.5, 0.5, 0.5)); 
+
+                            }
+                        }
+                    }
+                j = j + 1;
+            }
+            j = 0;
+            i = i + 1;
+        }
+        i = 0;
+    }
+   
+
+
     
 
-    while i < sorted_vertices.len() {
-        if i % 4 != 0 {
-            i = i + 1;
-            continue;
-        }
-            let first_number = sorted_vertices[i];
-            let fourth_number = sorted_vertices[i+3];
+   
 
-            for j in (0..sorted_vertices.len()).step_by(4) {
-                if i != j { // Skip comparing the same subarray
-                    if sorted_vertices.len() > j + 2 && first_number == sorted_vertices[j + 1] && fourth_number == sorted_vertices[j + 2] &&  sorted_normals[j + 2] == sorted_normals[i] && sorted_normals[i+3] == sorted_normals[j + 1] {
-                        println!("{} : {}",i/4,j/4); 
-                        if(i < j){
-                            sorted_vertices.remove_multiple(vec![i,i+3,j+1,j+2]);
-                            let copy = sorted_vertices.remove(j-3);
-                            let copy2 = sorted_vertices.remove(j-2);
-                            sorted_vertices.insert(i+1, copy);
-                            sorted_vertices.insert(i+2, copy2);
-                            
-                            sorted_normals.remove_multiple(vec![i,i+3,j+1,j+2]);
-                            let copy = sorted_normals.remove(j-3);
-                            let copy2 = sorted_normals.remove(j-2);
-                            sorted_normals.insert(i+1, copy);
-                            sorted_normals.insert(i+2, copy2);
-                        }else{
-                            sorted_vertices.remove_multiple(vec![i,i+3,j+1,j+2]);
-                            let copy = sorted_vertices.remove(j);
-                            let copy2 = sorted_vertices.remove(j+1);
-                            sorted_vertices.insert(i+1-4, copy);
-                            sorted_vertices.insert(i+2-4, copy2);
-                            
-                            sorted_normals.remove_multiple(vec![i,i+3,j+1,j+2]);
-                            let copy = sorted_normals.remove(j);
-                            let copy2 = sorted_normals.remove(j+1);
-                            sorted_normals.insert(i+1-4, copy);
-                            sorted_normals.insert(i+2-4, copy2);
-                        }
-
-                    }
-                }
-        }
-        i = i + 1;
-    }
-    i = 0;
-    for i in 0..sorted_vertices.len(){
-        if i % 4 != 0 {continue;}
-        println!("{} {} {} {} {}",i/4,sorted_vertices[i] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[i+1] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[i+2] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[i+3] + Vec3::new(0.5, 0.5, 0.5))
-    }
+    
     // Generate all indices and colors for a face
 
     for i in 0..sorted_vertices.len()/4{
