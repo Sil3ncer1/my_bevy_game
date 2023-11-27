@@ -18,15 +18,15 @@ const BLOCK_AIR : i32 = 0;
 const BLOCK_SOLID : i32 = 1;
 
 // CHUNK VARIABLES
-const CHUNK_WIDTH : i32 = 15;
-const CHUNK_HEIGHT : i32 = 114;
+const CHUNK_WIDTH : i32 = 32;
+const CHUNK_HEIGHT : i32 = 256;
 
 // TERRAIN VARIABLES
 const OCTAVES : usize = 4;
 const GROUND_LEVEL : i32 = 100;
-const AMPLITUDE : i32 = 4;
+const AMPLITUDE : i32 = 5;
 const SCALE : f64 = 0.05;
-const RENDER_DISTANCE : i32 = 20;
+const RENDER_DISTANCE : i32 = 25;
 
 
 struct Block {
@@ -309,8 +309,10 @@ fn create_cube_mesh(
 
     
 
-    // how often it should iterate (probably more efficient to iterate so long as long somethings changes / optimized)
-    for g in 0..5{
+    //  g checks how often it should iterate (as long something gets optimized)
+    let mut g = 1;
+    while g != 0{
+        g = 0;
         let mut i = 0;
         let mut j: usize = 0;  
         while i < sorted_vertices.len() {
@@ -343,6 +345,8 @@ fn create_cube_mesh(
                                 let copy2 = sorted_normals.remove(j-2);
                                 sorted_normals.insert(i, copy);
                                 sorted_normals.insert(i+3, copy2);
+
+                                g = g + 1;
                                 //println!("---{}: {} {} {} {}",i/4,sorted_vertices[i] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[i+1] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[i+2] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[i+3] + Vec3::new(0.5, 0.5, 0.5));
 
                             }else{
@@ -357,6 +361,7 @@ fn create_cube_mesh(
                                 let copy2 = sorted_normals.remove(i-2);
                                 sorted_normals.insert(j+1, copy);
                                 sorted_normals.insert(j+2, copy2);
+                                g = g + 1;
                             //println!("---{}: {} {} {} {}",j/4,sorted_vertices[j] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[j+1] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[j+2] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[j+3] + Vec3::new(0.5, 0.5, 0.5)); 
 
                             }
@@ -367,10 +372,74 @@ fn create_cube_mesh(
             j = 0;
             i = i + 1;
         }
-        i = 0;
     }
-   
+    
+    let mut g = 1;
+    while g != 0{
+        g = 0;
+        let mut i = 0;
+        let mut j: usize = 0;  
+        while i < sorted_vertices.len() {
+            if i % 4 != 0 {
+                i = i + 1;
+                continue;
+            }
+                let third_number = sorted_vertices[i+2];
+                let fourth_number = sorted_vertices[i+3];
+    
+            while j < sorted_vertices.len() {
+                if j % 4 != 0 {
+                    j = j + 1;
+                    continue;
+                }
+                    if i != j { // Skip comparing the same subarray
+                        
+                        if sorted_vertices.len() > j + 2 && third_number == sorted_vertices[j + 1] && fourth_number == sorted_vertices[j] &&  sorted_normals[j + 3] == sorted_normals[i] && sorted_normals[i+2] == sorted_normals[j + 1] {
+                            //println!("---{}: {} {} {} {}",i/4,sorted_vertices[i] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[i+1] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[i+2] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[i+3] + Vec3::new(0.5, 0.5, 0.5));
+                            //println!("---{}: {} {} {} {}",j/4,sorted_vertices[j] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[j+1] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[j+2] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[j+3] + Vec3::new(0.5, 0.5, 0.5));
+                            if i < j{
+                                sorted_vertices.remove_multiple(vec![i+2,i+3,j,j+1]);
+                                let copy = sorted_vertices.remove(j+2-4);
+                                let copy2 = sorted_vertices.remove(j+2-4);
+                                sorted_vertices.insert(i+2, copy);
+                                sorted_vertices.insert(i+3, copy2);
 
+                                sorted_normals.remove_multiple(vec![i+2,i+3,j+2,j+3]);
+                                let copy = sorted_normals.remove(j+2-4);
+                                let copy2 = sorted_normals.remove(j+2-4);
+                                sorted_normals.insert(i+2, copy);
+                                sorted_normals.insert(i+3, copy2);
+
+                                g = g + 1;
+                            //println!("{}: {} {} {} {}",i/4,sorted_vertices[i] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[i+1] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[i+2] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[i+3] + Vec3::new(0.5, 0.5, 0.5));
+
+                            }else{
+
+                                sorted_vertices.remove_multiple(vec![i+2,i+3,j,j+1]);
+                                let copy = sorted_vertices.remove(i-2);
+                                let copy2 = sorted_vertices.remove(i-2);
+                                sorted_vertices.insert(j, copy);
+                                sorted_vertices.insert(j+1, copy2);
+
+                                sorted_normals.remove_multiple(vec![i+2,i+3,j,j+1]);
+                                let copy = sorted_normals.remove(i-2);
+                                let copy2 = sorted_normals.remove(i-2);
+                                sorted_normals.insert(j, copy);
+                                sorted_normals.insert(j+1, copy2);
+
+                                g = g + 1;
+                           
+                            //println!("+++{}: {} {} {} {}",j/4,sorted_vertices[j] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[j+1] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[j+2] + Vec3::new(0.5, 0.5, 0.5),sorted_vertices[j+3] + Vec3::new(0.5, 0.5, 0.5)); 
+
+                            }
+                        }
+                    }
+                j = j + 1;
+            }
+            j = 0;
+            i = i + 1;
+        }
+    }
 
     
 
