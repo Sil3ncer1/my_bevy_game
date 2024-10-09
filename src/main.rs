@@ -17,10 +17,6 @@ fn main() {
         }),
         ..default()
     }))
-        .add_plugins((
-            FrameTimeDiagnosticsPlugin,
-            LogDiagnosticsPlugin::default(),
-        ))
         .add_plugins(WireframePlugin)
         .insert_resource(WireframeConfig {
             global: false,

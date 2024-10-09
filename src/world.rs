@@ -3,7 +3,10 @@ use std::slice::Chunks;
 use bevy::prelude::*;
 use bevy::ui::debug;
 use rand::Rng;
-use bevy::render::render_resource::PrimitiveTopology;
+use bevy::render::{
+    render_asset::RenderAssetPlugin,
+    render_resource::PrimitiveTopology,
+};
 use noise::{NoiseFn, Perlin};
 use bevy::utils::HashMap;
 use std::cmp::Ordering;
@@ -26,17 +29,17 @@ const OCTAVES : usize = 4;
 const GROUND_LEVEL : i32 = 100;
 const AMPLITUDE : i32 = 3;
 const SCALE : f64 = 0.05;
-const RENDER_DISTANCE : i32 = 20;
+const RENDER_DISTANCE : i32 = 2;
 
 
 struct Block {
     id: i32,
-    block_type: i32,
+    block_data: u32,
 }
 
 impl Block {
-    pub fn new(id: i32, block_type: i32) -> Self {
-        Block { id, block_type }
+    pub fn new(id: i32, block_data: u32) -> Self {
+        Block { id, block_data }
     }
 }
 
@@ -50,7 +53,6 @@ impl Chunk {
     pub fn new(id: i32, size: IVec3, position: IVec2) -> Self {
         let num_voxels: i32 = size.x * size.y * size.z;
         let mut blocks: Vec<Block> = Vec::with_capacity(num_voxels as usize);
-
         let mut block_ids : i32 = 0; 
     
 
@@ -74,22 +76,45 @@ impl Chunk {
     }
 }
 
-// Get the value of the given 2D noise at x, z and choose the corresponding block type
-fn get_block(x: i32, y: i32, z: i32, noises: &mut Vec<Perlin>) -> i32 {
-    let mut value : f64 = 0.0;
+// Get the value of the given 2D noise at x, z and choose the corresponding block data
+fn get_block(x: i32, y: i32, z: i32, noises: &mut Vec<Perlin>) -> u32 {
+    let mut value: f64 = 0.0;
 
+    // Calculate the noise value for terrain
     for noise in noises {
         value += noise.get([x as f64 * SCALE, z as f64 * SCALE]);
     }
 
-    let surface_y : i32 = (GROUND_LEVEL as f64 + (value * AMPLITUDE as f64)) as i32;
-    
-    if y < surface_y {
-        return BLOCK_SOLID;
+    let surface_y: i32 = (GROUND_LEVEL as f64 + (value * AMPLITUDE as f64)) as i32;
+
+    // Determine block type (here, it's just 0 for air, 1 for solid, but you could extend it)
+    let block_type: u32 = if y < surface_y {
+        1
     } else {
-        return BLOCK_AIR;
-    }
+        0
+    };
+
+    // Ensure the block_type fits in 4 bits (0-15)
+    let block_type = block_type & 0xF; // 4 bits for block type (0-15)
+
+    // Encode block data into a single u32:
+    // Use 4 bits for block type
+    // Use 6 bits each for x, y, and z (assuming the coordinates are within 0-63 range)
+    let x_encoded = (x & 0x3F) as u32; // 6 bits for x (0-63)
+    let y_encoded = (y & 0x3F) as u32; // 6 bits for y (0-63)
+    let z_encoded = (z & 0x3F) as u32; // 6 bits for z (0-63)
+
+    // Pack into a 32-bit unsigned integer:
+    //       00000000000001011110000100011000
+    //Empty: ---------- 
+    //Type:            ---- 
+    //xPos:                ------
+    //yPos:                      ------
+    //zPos:                            ------
+    let block_data: u32 = (block_type << 18) | (x_encoded << 12) | (y_encoded << 6) | z_encoded;
+    return block_data;
 }
+
 
 
 // Generate all chunks in render distance
@@ -177,31 +202,31 @@ fn create_cube_mesh(
         let z: i32 = (i % (CHUNK_WIDTH * CHUNK_WIDTH)) / CHUNK_WIDTH;
         let y: i32 = i / (CHUNK_WIDTH * CHUNK_WIDTH);
 
-        if chunk.blocks[i as usize].block_type == BLOCK_AIR { continue; }
+        if (chunk.blocks[i as usize].block_data >> 18) & 0xF == 0 { continue; }
 
         // X Direction------------------------------
-        if (i + 1 < num_voxels && (i + 1) % CHUNK_WIDTH != 0) && chunk.blocks[(i + 1) as usize].block_type == BLOCK_AIR {
+        if (i + 1 < num_voxels && (i + 1) % CHUNK_WIDTH != 0) && ((chunk.blocks[(i + 1) as usize].block_data >> 18) & 0xF) == 0{
             vfaces.push(0);
         }
 
         // X Direction right chunk neighbor if necessary
         else if (i + 1) % CHUNK_WIDTH == 0 && neighbors_by_direction.contains_key("right") {
 
-            if neighbors_by_direction.get("right").unwrap().blocks[(i - CHUNK_WIDTH + 1) as usize].block_type == BLOCK_AIR{
+            if ((neighbors_by_direction.get("right").unwrap().blocks[(i - CHUNK_WIDTH + 1) as usize].block_data  >> 18) & 0xF) == 0{
 
                 vfaces.push(0);
             }
         }
         
         // -X Direction------------------------------
-        if (i > 0 && i % CHUNK_WIDTH != 0) && chunk.blocks[(i - 1) as usize].block_type == BLOCK_AIR{
+        if (i > 0 && i % CHUNK_WIDTH != 0) && (chunk.blocks[(i - 1) as usize].block_data >> 18) & 0xF == 0{
             vfaces.push(1);
         }
 
         // X Direction left chunk neighbor if necessary
         else if (i % CHUNK_WIDTH == 0) && neighbors_by_direction.contains_key("left") {
 
-            if neighbors_by_direction.get("left").unwrap().blocks[(i + CHUNK_WIDTH - 1) as usize].block_type == BLOCK_AIR{
+            if (neighbors_by_direction.get("left").unwrap().blocks[(i + CHUNK_WIDTH - 1) as usize].block_data >> 18) & 0xF == 0{
 
                 vfaces.push(1);
             }
@@ -211,13 +236,13 @@ fn create_cube_mesh(
 
         // Y Direction ------------------------------
         // (not necessary to check for neighbor because no chunk is on top of each other)
-        if ((i + num_voxel_per_row < num_voxels) && chunk.blocks[(i + num_voxel_per_row) as usize].block_type == BLOCK_AIR)
+        if ((i + num_voxel_per_row < num_voxels) && (chunk.blocks[(i + num_voxel_per_row) as usize].block_data >> 18) & 0xF == 0)
         || (i + num_voxel_per_row >= num_voxels) {
             vfaces.push(2);
         }
         
         // -Y Direction ------------------------------
-        if (i - num_voxel_per_row >= 0) && chunk.blocks[(i - num_voxel_per_row) as usize].block_type == BLOCK_AIR {
+        if (i - num_voxel_per_row >= 0) && (chunk.blocks[(i - num_voxel_per_row) as usize].block_data >> 18) & 0xF == 0{
             vfaces.push(3);
         }
 
@@ -225,14 +250,14 @@ fn create_cube_mesh(
 
 
         // Z Direction------------------------------
-        if (i + CHUNK_WIDTH < num_voxels && i / num_voxel_per_row == (i + CHUNK_WIDTH) / num_voxel_per_row) && chunk.blocks[(i + CHUNK_WIDTH) as usize].block_type == BLOCK_AIR {
+        if (i + CHUNK_WIDTH < num_voxels && i / num_voxel_per_row == (i + CHUNK_WIDTH) / num_voxel_per_row) && (chunk.blocks[(i + CHUNK_WIDTH) as usize].block_data >> 18) & 0xF == 0{
             vfaces.push(4);
         }
    
         // Z Direction down chunk neighbor if necessary
         else if (i / num_voxel_per_row != (i + CHUNK_WIDTH) / num_voxel_per_row) && neighbors_by_direction.contains_key("down") {
 
-            if neighbors_by_direction.get("down").unwrap().blocks[(i - CHUNK_WIDTH * (CHUNK_WIDTH - 1)) as usize].block_type == BLOCK_AIR{
+            if (neighbors_by_direction.get("down").unwrap().blocks[(i - CHUNK_WIDTH * (CHUNK_WIDTH - 1)) as usize].block_data >> 18) & 0xF == 0{
 
                 vfaces.push(4);
             }
@@ -240,14 +265,14 @@ fn create_cube_mesh(
 
 
         // -Z Direction------------------------------
-        if (i - CHUNK_WIDTH >= 0 && i / num_voxel_per_row == (i - CHUNK_WIDTH) / num_voxel_per_row) && chunk.blocks[(i - CHUNK_WIDTH) as usize].block_type == BLOCK_AIR {
+        if (i - CHUNK_WIDTH >= 0 && i / num_voxel_per_row == (i - CHUNK_WIDTH) / num_voxel_per_row) && (chunk.blocks[(i - CHUNK_WIDTH) as usize].block_data >> 18) & 0xF == 0{
             vfaces.push(5);
         }
 
         // Z Direction top chunk neighbor if necessary
         else if (i / num_voxel_per_row != (i - CHUNK_WIDTH) / num_voxel_per_row) && neighbors_by_direction.contains_key("top") {
 
-            if neighbors_by_direction.get("top").unwrap().blocks[(i + CHUNK_WIDTH * (CHUNK_WIDTH - 1)) as usize].block_type == BLOCK_AIR{
+            if (neighbors_by_direction.get("top").unwrap().blocks[(i + CHUNK_WIDTH * (CHUNK_WIDTH - 1)) as usize].block_data >> 18) & 0xF == 0{
 
                 vfaces.push(5);
             }
